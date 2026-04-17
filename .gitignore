@@ -57,6 +57,7 @@ env/
 *.pth
 training/tfjs_model/
 saved_models/
+ShanghaiTech/
 
 # ide & OS
 .vscode/
