@@ -39,3 +39,25 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python & ml environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env/
+
+# ml models / weights
+*.h5
+*.hdf5
+*.keras
+*.pt
+*.pth
+training/tfjs_model/
+saved_models/
+
+# ide & OS
+.vscode/
+.idea/
