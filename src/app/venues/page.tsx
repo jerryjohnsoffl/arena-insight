@@ -25,7 +25,7 @@ export default function VenueSelection() {
         currentName = session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Attendee';
         
         localStorage.setItem('userRole', currentRole);
-        localStorage.setItem('userName', currentName);
+        localStorage.setItem('userName', currentName || '');
       }
 
       if (!currentRole) {
