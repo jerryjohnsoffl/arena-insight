@@ -13,11 +13,11 @@ export default function Login() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Mock Authentication
     // If username is 'admin', set role as 'host'. Otherwise, 'attendee'.
     const role = username.trim().toLowerCase() === 'admin' ? 'host' : 'attendee';
-    
+
     // Store in localStorage for the unified dashboard to know the user's role
     localStorage.setItem('userRole', role);
     localStorage.setItem('userName', username.trim());
@@ -44,11 +44,11 @@ export default function Login() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-6 text-zinc-50 font-sans">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-indigo-900/20 via-zinc-950 to-zinc-950 -z-10"></div>
-      
+
       <main className="flex flex-col items-center max-w-sm w-full gap-8">
         <div className="text-center w-full">
           <h1 className="text-5xl md:text-6xl font-black tracking-tight bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent">
-            Aura
+            Arena Insight
           </h1>
           <p className="text-zinc-400 mt-2 text-sm">Sign in to access your dashboard</p>
         </div>
@@ -58,11 +58,11 @@ export default function Login() {
             <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest ml-1">Username</label>
             <div className="relative">
               <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter 'admin' for Host"
+                placeholder="Enter full name"
                 required
                 className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl pl-11 pr-4 py-3 outline-none focus:border-indigo-500 transition-colors"
               />
@@ -73,8 +73,8 @@ export default function Login() {
             <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest ml-1">Password</label>
             <div className="relative">
               <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input 
-                type="password" 
+              <input
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -84,20 +84,20 @@ export default function Login() {
             </div>
           </div>
 
-          <button 
+          <button
             type="submit"
             className="w-full bg-white text-black hover:bg-zinc-200 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(255,255,255,0.1)] mt-2"
           >
-            Authenticate <ArrowRight size={18} />
+            Sign-in <ArrowRight size={18} />
           </button>
-          
+
           <div className="relative flex items-center py-2">
             <div className="flex-grow border-t border-zinc-800"></div>
             <span className="flex-shrink-0 mx-4 text-zinc-500 text-xs uppercase tracking-widest font-bold">Or</span>
             <div className="flex-grow border-t border-zinc-800"></div>
           </div>
-          
-          <button 
+
+          <button
             type="button"
             onClick={handleGoogleLogin}
             disabled={isGoogleLoading}
