@@ -1,11 +1,14 @@
 {
   "name": "arena-insight",
+  "homepage": "https://jerryjohnsoffl.github.io/arena-insight",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "predeploy": "npm run build",
     "build": "next build",
     "start": "next start",
+    "deploy": "gh-pages -d build",
     "lint": "eslint"
   },
   "dependencies": {
