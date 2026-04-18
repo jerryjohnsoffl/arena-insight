@@ -4,16 +4,14 @@ import * as tf from '@tensorflow/tfjs';
 export function useCrowdModel() {
   const [model, setModel] = useState<tf.LayersModel | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function initModel() {
       try {
         const loadedModel = await tf.loadLayersModel('/model/model.json');
         setModel(loadedModel);
-      } catch (err) {
-        console.error('Failed to load crowd model:', err);
-        setError('Crowd analysis engine offline. Refresh page or check connection.');
+      } catch (error) {
+        console.error('Failed to load crowd model:', error);
       } finally {
         setIsInitializing(false);
       }
@@ -47,6 +45,7 @@ export function useCrowdModel() {
     });
   }, [model]);
 
-  return { model, isInitializing, error, estimateCrowd };
+  return { model, isInitializing, estimateCrowd };
 }
+
 

@@ -301,27 +301,29 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {/* Data Source Switcher */}
-            <div className="hidden md:flex rounded-xl border border-zinc-800 bg-zinc-950 p-1 mr-4">
-              <button 
-                onClick={() => switchDataSource('simulation')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'simulation' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Simulation
-              </button>
-              <button 
-                onClick={() => switchDataSource('live')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'live' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Live
-              </button>
-              <button 
-                onClick={() => switchDataSource('supabase')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'supabase' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Network
-              </button>
-            </div>
+            {/* Data Source Switcher (Host Only) */}
+            {role === 'host' && (
+              <div className="hidden md:flex rounded-xl border border-zinc-800 bg-zinc-950 p-1 mr-4">
+                <button 
+                  onClick={() => switchDataSource('simulation')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'simulation' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  Simulation
+                </button>
+                <button 
+                  onClick={() => switchDataSource('live')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'live' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  Live
+                </button>
+                <button 
+                  onClick={() => switchDataSource('supabase')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'supabase' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  Network
+                </button>
+              </div>
+            )}
 
             <button onClick={logout} className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 transition shrink-0 group">
               <LogOut size={20} className="group-hover:text-rose-400 transition" />
@@ -410,14 +412,14 @@ function DashboardContent() {
                     </label>
                     <button
                       onClick={runAnalysis}
-                      disabled={!imageSrc || isInitializing || loading || !!modelError}
+                      disabled={!imageSrc || isInitializing || loading}
                       className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
-                        ${!imageSrc || isInitializing || !!modelError
+                        ${!imageSrc || isInitializing
                           ? "bg-zinc-950 text-zinc-500 cursor-not-allowed border border-zinc-800"
                           : "bg-white text-black hover:bg-zinc-200 active:scale-[0.99] shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                         }`}
                     >
-                      {loading ? <><Activity size={18} className="animate-spin" /> Analyzing...</> : modelError ? <><AlertTriangle size={18} /> Engine Offline</> : <><Activity size={18} /> Analyze</>}
+                      {loading ? <><Activity size={18} className="animate-spin" /> Analyzing...</> : <><Activity size={18} /> Analyze</>}
                     </button>
                   </div>
                 </>
