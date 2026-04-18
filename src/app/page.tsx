@@ -7,6 +7,7 @@ import { Lock, Mail, ArrowRight, User } from 'lucide-react';
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function AuthPage() {
 
     // Store in localStorage for the unified dashboard to know the user's role
     localStorage.setItem('userRole', role);
-    localStorage.setItem('userName', isLogin ? email.split('@')[0] : name.trim());
+    localStorage.setItem('userName', username.trim() || email.split('@')[0]);
 
     // Continue to venue selection
     router.push('/venues');
@@ -42,7 +43,7 @@ export default function AuthPage() {
 
         <form onSubmit={handleSubmit} className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-3xl p-8 shadow-2xl backdrop-blur-md flex flex-col relative overflow-hidden transition-all duration-500">
           
-          {/* Animated Name Field Container */}
+          {/* Animated Name Field Container (Only for Sign Up) */}
           <div className={`grid transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${isLogin ? 'grid-rows-[0fr] opacity-0 -translate-y-4' : 'grid-rows-[1fr] opacity-100 translate-y-0'}`}>
             <div className="overflow-hidden">
               <div className="flex flex-col gap-2 pb-6">
@@ -60,6 +61,22 @@ export default function AuthPage() {
                   />
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Permanent Username Field */}
+          <div className="flex flex-col gap-2 mb-6">
+            <label className="text-zinc-400 text-xs font-bold uppercase tracking-widest ml-1">Username</label>
+            <div className="relative">
+              <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Unique username"
+                required
+                className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl pl-11 pr-4 py-3 outline-none focus:border-indigo-500 transition-colors"
+              />
             </div>
           </div>
 
@@ -99,6 +116,7 @@ export default function AuthPage() {
           >
             {isLogin ? "Sign In" : "Sign Up"} <ArrowRight size={18} />
           </button>
+
 
           <div className="mt-6 text-center relative z-10">
             <button
