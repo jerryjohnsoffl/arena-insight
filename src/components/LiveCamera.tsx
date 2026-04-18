@@ -119,7 +119,7 @@ export function LiveCamera({ onFrame, onCountUpdate, zoneId, zoneName, isModelRe
   return (
     <div className="w-full flex flex-col gap-3">
       {/* Live Video Feed */}
-      <div className="aspect-[21/9] w-full bg-zinc-950 rounded-2xl overflow-hidden relative border border-zinc-800 shadow-inner">
+      <div className="aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden relative border border-zinc-800 shadow-inner">
         <video
           ref={videoRef}
           className="w-full h-full object-cover"

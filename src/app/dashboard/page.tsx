@@ -28,8 +28,13 @@ function DashboardContent() {
 
   const { activeMatch } = useActiveMatchContext(stadium.name);
 
-  const [role, setRole] = useState<string>('attendee');
+  const [role, setRole] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [dataSource, setDataSource] = useState<DataSource>('simulation');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Dynamic zones from stadium-specific data
   const stadiumZoneConfig = getStadiumZones(stadium.id, stadium.capacity);
@@ -90,7 +95,7 @@ function DashboardContent() {
   }, [dataSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Host/Command Center state
-  const { model, isInitializing, estimateCrowd } = useCrowdModel();
+  const { model, isInitializing, error: modelError, estimateCrowd } = useCrowdModel();
   const [feedMode, setFeedMode] = useState<FeedMode>('camera');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -180,6 +185,23 @@ function DashboardContent() {
     try {
       const estimatedCount = await estimateCrowd(imgRef.current, !!activeMatch);
       setCount(estimatedCount);
+      
+      // Auto-update the dashboard with the new specific metric
+      if (dataSource === 'simulation') {
+        stopSimulation();
+        setDataSource('live');
+      }
+      
+      setZones(prev => prev.map(zone => {
+        if (zone.id === zoneId) {
+          return {
+            ...zone,
+            currentCrowd: estimatedCount,
+            estimatedWaitMinutes: Math.ceil(estimatedCount / getProcessingRate(zone.id))
+          };
+        }
+        return zone;
+      }));
     } catch (err) {
       console.error(err);
     } finally {
@@ -252,7 +274,7 @@ function DashboardContent() {
     }
   };
 
-  if (!role) return null;
+  if (!mounted || !role) return null;
 
   return (
     <div className="min-h-screen bg-zinc-950 font-sans pb-24 text-zinc-50">
@@ -279,6 +301,28 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* Data Source Switcher */}
+            <div className="hidden md:flex rounded-xl border border-zinc-800 bg-zinc-950 p-1 mr-4">
+              <button 
+                onClick={() => switchDataSource('simulation')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'simulation' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Simulation
+              </button>
+              <button 
+                onClick={() => switchDataSource('live')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'live' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Live
+              </button>
+              <button 
+                onClick={() => switchDataSource('supabase')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'supabase' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Network
+              </button>
+            </div>
+
             <button onClick={logout} className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 transition shrink-0 group">
               <LogOut size={20} className="group-hover:text-rose-400 transition" />
             </button>
@@ -339,12 +383,18 @@ function DashboardContent() {
                 />
               ) : (
                 <>
-                  <div className="aspect-[21/9] w-full bg-zinc-950 rounded-2xl overflow-hidden relative border border-zinc-800 shadow-inner">
+                  <div className="aspect-video w-full bg-zinc-950 rounded-2xl overflow-hidden relative border border-zinc-800 shadow-inner">
                     {imageSrc ? (
-                      <>
+                      <div className="w-full h-full relative group">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={imageSrc} ref={imgRef} alt="Upload preview" className="w-full h-full object-cover" />
-                      </>
+                        <img src={imageSrc} ref={imgRef} alt="Upload preview" className="w-full h-full object-contain bg-zinc-900" />
+                        <button 
+                          onClick={() => { setImageSrc(null); setCount(null); }}
+                          className="absolute top-2 right-2 bg-zinc-900/80 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600 text-white"
+                        >
+                          <LogOut size={16} /> {/* Reuse logout icon for simple "remove" */}
+                        </button>
+                      </div>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
                         <UploadCloud size={40} className="mb-2 opacity-50" />
@@ -360,14 +410,14 @@ function DashboardContent() {
                     </label>
                     <button
                       onClick={runAnalysis}
-                      disabled={!imageSrc || isInitializing || loading}
+                      disabled={!imageSrc || isInitializing || loading || !!modelError}
                       className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
-                        ${!imageSrc || isInitializing
+                        ${!imageSrc || isInitializing || !!modelError
                           ? "bg-zinc-950 text-zinc-500 cursor-not-allowed border border-zinc-800"
                           : "bg-white text-black hover:bg-zinc-200 active:scale-[0.99] shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                         }`}
                     >
-                      {loading ? <><Activity size={18} className="animate-spin" /> Analyzing...</> : <><Activity size={18} /> Analyze</>}
+                      {loading ? <><Activity size={18} className="animate-spin" /> Analyzing...</> : modelError ? <><AlertTriangle size={18} /> Engine Offline</> : <><Activity size={18} /> Analyze</>}
                     </button>
                   </div>
                 </>

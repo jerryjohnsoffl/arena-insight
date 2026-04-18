@@ -27,7 +27,7 @@ export function StadiumMap({ zones, stadium }: { zones: Zone[], stadium?: Stadiu
     const ratio = current / capacity;
     if (ratio >= 0.8) return 'bg-red-500/20 text-red-500 border-red-500/50';
     if (ratio >= 0.5) return 'bg-amber-500/20 text-amber-500 border-amber-500/50';
-    return 'bg-emerald-500/100/20 text-emerald-500 border-emerald-500/50';
+    return 'bg-emerald-500/20 text-emerald-500 border-emerald-500/50';
   };
 
   // Identify the best gate based on smallest wait time

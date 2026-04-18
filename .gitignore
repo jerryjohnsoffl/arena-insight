@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/__tests__/
+/test/
 
 # next.js
 /.next/
@@ -58,6 +60,7 @@ env/
 training/tfjs_model/
 saved_models/
 ShanghaiTech/
+public/test_crowd.png
 
 # ide & OS
 .vscode/

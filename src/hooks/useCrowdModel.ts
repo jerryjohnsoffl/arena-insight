@@ -4,14 +4,16 @@ import * as tf from '@tensorflow/tfjs';
 export function useCrowdModel() {
   const [model, setModel] = useState<tf.LayersModel | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function initModel() {
       try {
         const loadedModel = await tf.loadLayersModel('/model/model.json');
         setModel(loadedModel);
-      } catch (error) {
-        console.error('Failed to load crowd model:', error);
+      } catch (err) {
+        console.error('Failed to load crowd model:', err);
+        setError('Crowd analysis engine offline. Refresh page or check connection.');
       } finally {
         setIsInitializing(false);
       }
@@ -33,8 +35,6 @@ export function useCrowdModel() {
 
       // Run inference
       const prediction = model.predict(tensor) as tf.Tensor;
-      // Get data synchronously to avoid await in tidy, or we can use async out of tidy
-      // Actually dataSync is better inside tidy
       const countArray = prediction.dataSync();
       
       // Sum the density map
@@ -43,10 +43,10 @@ export function useCrowdModel() {
         total += countArray[i];
       }
       
-      // Apply a 1.2x heuristic scaling if an event is active (to account for un-captured surroundings)
       return isActiveMatch ? Math.round(total * 1.2) : Math.round(total);
     });
   }, [model]);
 
-  return { model, isInitializing, estimateCrowd };
+  return { model, isInitializing, error, estimateCrowd };
 }
+
