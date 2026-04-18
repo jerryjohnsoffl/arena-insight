@@ -1,17 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { StadiumMap } from '@/components/StadiumMap';
 import { CrowdHeatmap } from '@/components/CrowdHeatmap';
+import { LiveCamera } from '@/components/LiveCamera';
 import { supabase } from '@/lib/supabase';
 import { useCrowdModel } from '@/hooks/useCrowdModel';
+import { useActiveMatchContext } from '@/hooks/useActiveMatchContext';
+import { useCrowdSimulation } from '@/hooks/useCrowdSimulation';
 import { stadiums } from '@/data/stadiums';
+import { getStadiumZones } from '@/data/stadiumZones';
 import { 
-  Navigation, Bell, Ticket, Coffee, ShoppingBag, Map, 
+  Navigation, Bell, Map, 
   UploadCloud, Activity, Database, Check, Camera, Users, AlertTriangle, MapPin,
-  LogOut
+  LogOut, Radio, Cpu, Ticket
 } from 'lucide-react';
+
+type FeedMode = 'upload' | 'camera';
+type DataSource = 'simulation' | 'live' | 'supabase';
 
 function DashboardContent() {
   const router = useRouter();
@@ -19,25 +26,72 @@ function DashboardContent() {
   const venueId = searchParams.get('venue');
   const stadium = stadiums.find(s => s.id === venueId) || stadiums[0];
 
+  const { activeMatch } = useActiveMatchContext(stadium.name);
+
   const [role, setRole] = useState<string>('attendee');
+  const [dataSource, setDataSource] = useState<DataSource>('simulation');
 
-  // Attendee state
-  const [zones, setZones] = useState([
-    { id: 'gate-a', name: 'Main Gate A', currentCrowd: 0, capacity: 1000, estimatedWaitMinutes: 0 },
-    { id: 'gate-b', name: 'North Gate B', currentCrowd: 0, capacity: 1000, estimatedWaitMinutes: 0 },
-    { id: 'gate-c', name: 'South Gate C', currentCrowd: 0, capacity: 800, estimatedWaitMinutes: 0 },
-    { id: 'food-east', name: 'Food Court East', currentCrowd: 0, capacity: 400, estimatedWaitMinutes: 0 },
-  ]);
+  // Dynamic zones from stadium-specific data
+  const stadiumZoneConfig = getStadiumZones(stadium.id, stadium.capacity);
+  const [zones, setZones] = useState(
+    stadiumZoneConfig.map(z => ({
+      id: z.id,
+      name: z.name,
+      currentCrowd: 0,
+      capacity: z.capacity,
+      estimatedWaitMinutes: 0,
+    }))
+  );
 
-  const PROCESSING_RATE: Record<string, number> = {
-    'gate-a': 35,
-    'gate-b': 30,
-    'gate-c': 40,
-    'food-east': 15,
-  };
+  // Build processing rate map from the zone config
+  const processingRateMap = useRef(
+    Object.fromEntries(stadiumZoneConfig.map(z => [z.id, z.processingRate]))
+  );
+
+  const getProcessingRate = useCallback((zoneId: string) => {
+    const base = processingRateMap.current[zoneId] || 30;
+    // Reduce throughput by 20% due to heavier active security + crowd surge
+    return activeMatch ? Math.floor(base * 0.8) : base;
+  }, [activeMatch]);
+
+  // Crowd simulation engine
+  const { simulatedZones, isSimulating, startSimulation, stopSimulation } = useCrowdSimulation({
+    zones,
+    stadiumCapacity: stadium.capacity,
+    isActiveMatch: !!activeMatch,
+    getProcessingRate,
+  });
+
+  // When simulation data updates, push it to the main zones state (if simulation is the active source)
+  useEffect(() => {
+    if (dataSource === 'simulation' && simulatedZones.length > 0) {
+      setZones(prev => prev.map(zone => {
+        const sim = simulatedZones.find(s => s.id === zone.id);
+        if (sim) {
+          return {
+            ...zone,
+            currentCrowd: sim.currentCrowd,
+            estimatedWaitMinutes: sim.estimatedWaitMinutes,
+          };
+        }
+        return zone;
+      }));
+    }
+  }, [simulatedZones, dataSource]);
+
+  // Auto-start simulation on load
+  useEffect(() => {
+    if (dataSource === 'simulation' && !isSimulating) {
+      startSimulation();
+    }
+    return () => {
+      if (isSimulating) stopSimulation();
+    };
+  }, [dataSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Host/Command Center state
   const { model, isInitializing, estimateCrowd } = useCrowdModel();
+  const [feedMode, setFeedMode] = useState<FeedMode>('camera');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [count, setCount] = useState<number | null>(null);
@@ -55,7 +109,10 @@ function DashboardContent() {
     }
   }, [router]);
 
+  // Supabase live data fetching (when source = 'supabase')
   useEffect(() => {
+    if (dataSource !== 'supabase') return;
+
     const fetchLiveStats = async () => {
       const { data } = await supabase
         .from('crowd_metrics')
@@ -71,7 +128,7 @@ function DashboardContent() {
             return { 
               ...zone, 
               currentCrowd: crowd,
-              estimatedWaitMinutes: Math.ceil(crowd / PROCESSING_RATE[zone.id])
+              estimatedWaitMinutes: Math.ceil(crowd / getProcessingRate(zone.id))
             };
           }
           return zone;
@@ -90,7 +147,7 @@ function DashboardContent() {
             return {
               ...zone,
               currentCrowd: newData.estimated_count,
-              estimatedWaitMinutes: Math.ceil(newData.estimated_count / PROCESSING_RATE[zone.id])
+              estimatedWaitMinutes: Math.ceil(newData.estimated_count / getProcessingRate(zone.id))
             };
           }
           return zone;
@@ -101,7 +158,7 @@ function DashboardContent() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dataSource, getProcessingRate]);
 
   const gates = zones.filter(z => z.id.startsWith('gate-'));
   const worstGate = [...gates].sort((a, b) => b.estimatedWaitMinutes - a.estimatedWaitMinutes)[0];
@@ -121,7 +178,7 @@ function DashboardContent() {
     if (!imgRef.current) return;
     setLoading(true);
     try {
-      const estimatedCount = await estimateCrowd(imgRef.current);
+      const estimatedCount = await estimateCrowd(imgRef.current, !!activeMatch);
       setCount(estimatedCount);
     } catch (err) {
       console.error(err);
@@ -129,6 +186,31 @@ function DashboardContent() {
       setLoading(false);
     }
   };
+
+  // LiveCamera callback: when the ML model processes a frame
+  const handleLiveFrame = useCallback(async (videoElement: HTMLVideoElement): Promise<number> => {
+    return await estimateCrowd(videoElement, !!activeMatch);
+  }, [estimateCrowd, activeMatch]);
+
+  // LiveCamera callback: when a new count is produced
+  const handleLiveCountUpdate = useCallback((newCount: number, updatedZoneId: string) => {
+    setCount(newCount);
+    // When live camera produces data, switch to "live" data source and update zones
+    if (dataSource === 'simulation') {
+      stopSimulation();
+      setDataSource('live');
+    }
+    setZones(prev => prev.map(zone => {
+      if (zone.id === updatedZoneId) {
+        return {
+          ...zone,
+          currentCrowd: newCount,
+          estimatedWaitMinutes: Math.ceil(newCount / getProcessingRate(zone.id))
+        };
+      }
+      return zone;
+    }));
+  }, [dataSource, getProcessingRate, stopSimulation]);
 
   const saveToSupabase = async () => {
     if (count === null) return;
@@ -160,6 +242,16 @@ function DashboardContent() {
     router.push('/');
   };
 
+  // Data source switcher
+  const switchDataSource = (source: DataSource) => {
+    if (source === dataSource) return;
+    if (isSimulating) stopSimulation();
+    setDataSource(source);
+    if (source === 'simulation') {
+      startSimulation();
+    }
+  };
+
   if (!role) return null;
 
   return (
@@ -168,24 +260,25 @@ function DashboardContent() {
       <div className="bg-zinc-900 border-zinc-800 border-b border-zinc-800 p-6 sticky top-0 z-50 shadow-sm transition-all">
         <div className="flex items-center justify-between max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border ${role === 'host' ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-blue-500/100/20 text-blue-400 border-blue-500/30'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border ${role === 'host' ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-blue-500/20 text-blue-400 border-blue-500/30'}`}>
               {role === 'host' ? <Activity size={24} /> : <Ticket size={24} />}
             </div>
             <div>
-              <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-2">
+              <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-2 flex-wrap">
                 {stadium.name} 
-                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-800 text-zinc-300 font-medium uppercase tracking-wider">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 font-medium uppercase tracking-wider">
                   {role} View
                 </span>
+                {activeMatch && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-400 font-bold flex items-center gap-1">
+                    <Activity size={12} className="animate-pulse" /> {activeMatch.name} ({activeMatch.matchType.toUpperCase()})
+                  </span>
+                )}
               </h1>
               <p className="text-zinc-400 text-sm">{stadium.city}, {stadium.state} • {stadium.capacity.toLocaleString()} cap</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative w-10 h-10 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center text-zinc-300 transition shrink-0">
-              <Bell size={20} />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-zinc-900"></span>
-            </button>
             <button onClick={logout} className="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 transition shrink-0 group">
               <LogOut size={20} className="group-hover:text-rose-400 transition" />
             </button>
@@ -194,7 +287,9 @@ function DashboardContent() {
       </div>
 
       <main className="max-w-6xl mx-auto p-6 flex flex-col gap-8 mt-4">
-        
+
+
+
         {/* Host Upload Interface (Only for Host) */}
         {role === 'host' && (
           <div className="bg-zinc-900 border-zinc-800 border border-zinc-800 p-6 rounded-3xl shadow-xl flex flex-col md:flex-row gap-8">
@@ -214,38 +309,69 @@ function DashboardContent() {
                       ))}
                     </select>
                   </div>
-                  <label className="cursor-pointer text-sm font-bold px-4 py-3 border border-zinc-800 bg-zinc-800 hover:bg-white hover:text-zinc-50 text-zinc-300 rounded-xl transition shadow-sm whitespace-nowrap">
-                    Upload Scan
-                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                  </label>
+
+                  {/* Feed Mode Toggle */}
+                  <div className="flex rounded-xl border border-zinc-800 overflow-hidden">
+                    <button
+                      onClick={() => setFeedMode('camera')}
+                      className={`px-3 py-2 text-xs font-bold transition-all ${feedMode === 'camera' ? 'bg-indigo-600 text-white' : 'bg-zinc-950 text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      <Camera size={14} />
+                    </button>
+                    <button
+                      onClick={() => setFeedMode('upload')}
+                      className={`px-3 py-2 text-xs font-bold transition-all ${feedMode === 'upload' ? 'bg-indigo-600 text-white' : 'bg-zinc-950 text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                      <UploadCloud size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="aspect-[21/9] w-full bg-zinc-950 rounded-2xl overflow-hidden relative border border-zinc-800 shadow-inner">
-                {imageSrc ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imageSrc} ref={imgRef} alt="Upload preview" className="w-full h-full object-cover" />
-                  </>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
-                    <UploadCloud size={40} className="mb-2 opacity-50" />
-                    <p className="text-sm font-medium">Awaiting crowd visual upload</p>
+              {feedMode === 'camera' ? (
+                <LiveCamera 
+                  onFrame={handleLiveFrame}
+                  onCountUpdate={handleLiveCountUpdate}
+                  zoneId={zoneId}
+                  zoneName={zones.find(z => z.id === zoneId)?.name || zoneId}
+                  isModelReady={!!model && !isInitializing}
+                  isActiveMatch={!!activeMatch}
+                />
+              ) : (
+                <>
+                  <div className="aspect-[21/9] w-full bg-zinc-950 rounded-2xl overflow-hidden relative border border-zinc-800 shadow-inner">
+                    {imageSrc ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imageSrc} ref={imgRef} alt="Upload preview" className="w-full h-full object-cover" />
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
+                        <UploadCloud size={40} className="mb-2 opacity-50" />
+                        <p className="text-sm font-medium">Awaiting crowd visual upload</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <button
-                onClick={runAnalysis}
-                disabled={!imageSrc || isInitializing || loading}
-                className={`py-3 w-full rounded-xl font-bold flex items-center justify-center gap-2 transition-all
-                  ${!imageSrc || isInitializing
-                    ? "bg-zinc-950 text-zinc-500 cursor-not-allowed border border-zinc-800"
-                    : "bg-white text-zinc-50 hover:bg-zinc-200 active:scale-[0.99] shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                  }`}
-              >
-                {loading ? <><Activity size={18} className="animate-spin" /> Analyzing Image...</> : <><Activity size={18} /> Execute Crowd Analytics</>}
-              </button>
+                  <div className="flex gap-3">
+                    <label className="cursor-pointer text-sm font-bold px-4 py-3 border border-zinc-800 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl transition shadow-sm whitespace-nowrap">
+                      Upload Scan
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    </label>
+                    <button
+                      onClick={runAnalysis}
+                      disabled={!imageSrc || isInitializing || loading}
+                      className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
+                        ${!imageSrc || isInitializing
+                          ? "bg-zinc-950 text-zinc-500 cursor-not-allowed border border-zinc-800"
+                          : "bg-white text-black hover:bg-zinc-200 active:scale-[0.99] shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                        }`}
+                    >
+                      {loading ? <><Activity size={18} className="animate-spin" /> Analyzing...</> : <><Activity size={18} /> Analyze</>}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="w-full md:w-1/3 flex flex-col">
@@ -269,7 +395,7 @@ function DashboardContent() {
                 disabled={saving || saved || count === null}
                 className={`mt-4 py-4 w-full rounded-xl font-bold flex items-center justify-center gap-2 transition-all border
                   ${saved
-                    ? "bg-emerald-500/100/10 text-emerald-400 border-emerald-500/20"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                     : "bg-indigo-600 hover:bg-indigo-700 text-zinc-50 border-transparent shadow-[0_0_20px_rgba(79,70,229,0.3)]"
                   } ${count === null ? "opacity-50 cursor-not-allowed saturate-0" : ""}`}
               >
@@ -281,8 +407,8 @@ function DashboardContent() {
 
         {/* Global Alert Notification */}
         {worstGate?.estimatedWaitMinutes > 15 ? (
-          <div className="bg-blue-500/10 border border-blue-500/30  p-5 rounded-2xl flex items-start gap-4 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
-            <div className="mt-1 text-blue-400 animate-pulse bg-blue-500/100/20 p-2 rounded-xl"><Navigation size={20} /></div>
+          <div className="bg-blue-500/10 border border-blue-500/30 p-5 rounded-2xl flex items-start gap-4 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
+            <div className="mt-1 text-blue-400 animate-pulse bg-blue-500/20 p-2 rounded-xl"><Navigation size={20} /></div>
             <div>
               <h3 className="font-bold text-blue-100 text-lg">Live Traffic Alert</h3>
               <p className="text-blue-200/80 mt-1">
@@ -292,8 +418,8 @@ function DashboardContent() {
             </div>
           </div>
         ) : (
-          <div className="bg-emerald-500/10 border border-emerald-500/30  p-5 rounded-2xl flex items-start gap-4 shadow-[0_0_30px_rgba(16,185,129,0.05)]">
-            <div className="mt-1 text-emerald-400 bg-emerald-500/100/20 p-2 rounded-xl"><Navigation size={20} /></div>
+          <div className="bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-2xl flex items-start gap-4 shadow-[0_0_30px_rgba(16,185,129,0.05)]">
+            <div className="mt-1 text-emerald-400 bg-emerald-500/20 p-2 rounded-xl"><Navigation size={20} /></div>
             <div>
               <h3 className="font-bold text-emerald-100 text-lg">All Clear</h3>
               <p className="text-emerald-200/80 mt-1">
@@ -317,25 +443,7 @@ function DashboardContent() {
           </section>
         </div>
 
-        {/* Quick Actions */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <button className="flex flex-col items-center justify-center gap-3 bg-zinc-900 border-zinc-800 hover:bg-zinc-800 transition p-6 rounded-2xl border border-zinc-800 text-zinc-300 shadow-sm hover:shadow-md">
-            <Coffee size={24} className="text-orange-400" />
-            <span className="font-medium">Order Food</span>
-          </button>
-          <button className="flex flex-col items-center justify-center gap-3 bg-zinc-900 border-zinc-800 hover:bg-zinc-800 transition p-6 rounded-2xl border border-zinc-800 text-zinc-300 shadow-sm hover:shadow-md">
-            <ShoppingBag size={24} className="text-fuchsia-400" />
-            <span className="font-medium">Merch Store</span>
-          </button>
-          <button className="flex flex-col items-center justify-center gap-3 bg-zinc-900 border-zinc-800 hover:bg-zinc-800 transition p-6 rounded-2xl border border-zinc-800 text-zinc-300 shadow-sm hover:shadow-md">
-            <Ticket size={24} className="text-emerald-400" />
-            <span className="font-medium">My Tickets</span>
-          </button>
-          <button className="flex flex-col items-center justify-center gap-3 bg-zinc-900 border-zinc-800 hover:bg-zinc-800 transition p-6 rounded-2xl border border-zinc-800 text-zinc-300 shadow-sm hover:shadow-md">
-            <Map size={24} className="text-blue-400" />
-            <span className="font-medium">Find Seat</span>
-          </button>
-        </section>
+
 
       </main>
     </div>

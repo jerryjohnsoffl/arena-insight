@@ -166,20 +166,7 @@ export default function RouteMap({ zones, stadium }: RouteMapProps) {
           </Popup>
         </Marker>
         
-        {/* Dynamic Zone Markers */}
-        {zones.map(zone => (
-          <Marker 
-            key={zone.id} 
-            position={zoneCoords[zone.id] || stadiumCenter} 
-            icon={getZoneIcon(zone.currentCrowd, zone.capacity)}
-          >
-            <Popup>
-              <strong>{zone.name}</strong><br />
-              Status: {Math.round((zone.currentCrowd/zone.capacity)*100)}% Capacity<br />
-              Wait Time: <strong>{zone.estimatedWaitMinutes} min</strong>
-            </Popup>
-          </Marker>
-        ))}
+
       </MapContainer>
     </div>
   );

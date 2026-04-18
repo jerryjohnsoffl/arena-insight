@@ -19,7 +19,7 @@ export function useCrowdModel() {
     initModel();
   }, []);
 
-  const estimateCrowd = useCallback(async (imageElement: HTMLImageElement | HTMLVideoElement): Promise<number> => {
+  const estimateCrowd = useCallback(async (imageElement: HTMLImageElement | HTMLVideoElement, isActiveMatch: boolean = false): Promise<number> => {
     if (!model) return 0;
     
     return tf.tidy(() => {
@@ -42,7 +42,9 @@ export function useCrowdModel() {
       for (let i = 0; i < countArray.length; i++) {
         total += countArray[i];
       }
-      return Math.round(total);
+      
+      // Apply a 1.2x heuristic scaling if an event is active (to account for un-captured surroundings)
+      return isActiveMatch ? Math.round(total * 1.2) : Math.round(total);
     });
   }, [model]);
 
