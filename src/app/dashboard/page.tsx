@@ -227,25 +227,6 @@ function DashboardContent() {
     setDataSource(source);
   };
 
-  // Simulate random crowd activity (dev/demo mode)
-  useEffect(() => {
-    if (dataSource !== 'live') return;
-
-    const tick = setInterval(() => {
-      setZones(prev => prev.map(zone => {
-        const delta = Math.floor((Math.random() - 0.4) * 80); // bias toward filling
-        const next = Math.max(0, Math.min(zone.capacity, zone.currentCrowd + delta));
-        return {
-          ...zone,
-          currentCrowd: next,
-          estimatedWaitMinutes: Math.ceil(next / getProcessingRate(zone.id)),
-        };
-      }));
-    }, 2000); // update every 2s
-
-    return () => clearInterval(tick);
-  }, [dataSource, getProcessingRate]);
-
   if (!mounted || !role) return null;
 
   return (
@@ -436,7 +417,7 @@ function DashboardContent() {
           <section className="col-span-1 lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl overflow-hidden flex flex-col h-full">
             <h2 className="text-lg font-bold mb-6 flex items-center gap-2"><Map size={20} className="text-zinc-400" /> Interactive Venue Map</h2>
             <div className="flex-1">
-              <StadiumMap zones={zones} stadium={stadium} />
+              <StadiumMap zones={zones} />
             </div>
           </section>
 
