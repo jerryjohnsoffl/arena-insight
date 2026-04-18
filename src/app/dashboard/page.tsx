@@ -95,7 +95,7 @@ function DashboardContent() {
   }, [dataSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Host/Command Center state
-  const { model, isInitializing, error: modelError, estimateCrowd } = useCrowdModel();
+  const { model, isInitializing, estimateCrowd } = useCrowdModel();
   const [feedMode, setFeedMode] = useState<FeedMode>('camera');
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
