@@ -8,7 +8,9 @@ export function useCrowdModel() {
   useEffect(() => {
     async function initModel() {
       try {
-        const loadedModel = await tf.loadLayersModel('/model/model.json');
+        const loadedModel = await tf.loadLayersModel(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/models/model.json`
+        );
         setModel(loadedModel);
       } catch (error) {
         console.error('Failed to load crowd model:', error);
@@ -21,7 +23,7 @@ export function useCrowdModel() {
 
   const estimateCrowd = useCallback(async (imageElement: HTMLImageElement | HTMLVideoElement, isActiveMatch: boolean = false): Promise<number> => {
     if (!model) return 0;
-    
+
     return tf.tidy(() => {
       // Create tensor from image/video frame
       const tensor = tf.browser
@@ -34,13 +36,13 @@ export function useCrowdModel() {
       // Run inference
       const prediction = model.predict(tensor) as tf.Tensor;
       const countArray = prediction.dataSync();
-      
+
       // Sum the density map
       let total = 0;
       for (let i = 0; i < countArray.length; i++) {
         total += countArray[i];
       }
-      
+
       return isActiveMatch ? Math.round(total * 1.2) : Math.round(total);
     });
   }, [model]);

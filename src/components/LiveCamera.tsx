@@ -9,10 +9,9 @@ interface LiveCameraProps {
   zoneId: string;
   zoneName: string;
   isModelReady: boolean;
-  isActiveMatch: boolean;
 }
 
-export function LiveCamera({ onFrame, onCountUpdate, zoneId, zoneName, isModelReady, isActiveMatch }: LiveCameraProps) {
+export function LiveCamera({ onFrame, onCountUpdate, zoneId, zoneName, isModelReady }: LiveCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -148,11 +147,7 @@ export function LiveCamera({ onFrame, onCountUpdate, zoneId, zoneName, isModelRe
                 ML Active
               </div>
             )}
-            {isActiveMatch && (
-              <div className="flex items-center gap-1.5 bg-orange-600/90 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
-                EVENT
-              </div>
-            )}
+
           </div>
         )}
 

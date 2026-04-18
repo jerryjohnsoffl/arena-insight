@@ -67,3 +67,6 @@ training/
 # ide & OS
 .vscode/
 .idea/
+
+# ML model weights
+public/model/

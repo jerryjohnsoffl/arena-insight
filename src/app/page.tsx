@@ -23,8 +23,8 @@ export default function AuthPage() {
     localStorage.setItem('userRole', role);
     localStorage.setItem('userName', username.trim() || email.split('@')[0]);
 
-    // Continue to venue selection
-    router.push('/venues');
+    // Continue to dashboard for the single stadium
+    router.push('/dashboard?venue=stadium-a');
   };
 
   return (

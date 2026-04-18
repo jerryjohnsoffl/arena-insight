@@ -7,30 +7,26 @@ import { CrowdHeatmap } from '@/components/CrowdHeatmap';
 import { LiveCamera } from '@/components/LiveCamera';
 import { supabase } from '@/lib/supabase';
 import { useCrowdModel } from '@/hooks/useCrowdModel';
-import { useActiveMatchContext } from '@/hooks/useActiveMatchContext';
-import { useCrowdSimulation } from '@/hooks/useCrowdSimulation';
 import { stadiums } from '@/data/stadiums';
 import { getStadiumZones } from '@/data/stadiumZones';
-import { 
-  Navigation, Bell, Map, 
+import {
+  Bell, Map,
   UploadCloud, Activity, Database, Check, Camera, Users, AlertTriangle, MapPin,
   LogOut, Radio, Cpu, Ticket
 } from 'lucide-react';
 
 type FeedMode = 'upload' | 'camera';
-type DataSource = 'simulation' | 'live' | 'supabase';
+type DataSource = 'live' | 'supabase';
 
 function DashboardContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const venueId = searchParams.get('venue');
-  const stadium = stadiums.find(s => s.id === venueId) || stadiums[0];
+  const stadium = stadiums[0];
 
-  const { activeMatch } = useActiveMatchContext(stadium.name);
+  const activeMatch = null;
 
   const [role, setRole] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [dataSource, setDataSource] = useState<DataSource>('simulation');
+  const [dataSource, setDataSource] = useState<DataSource>('live');
 
   useEffect(() => {
     setMounted(true);
@@ -59,40 +55,7 @@ function DashboardContent() {
     return activeMatch ? Math.floor(base * 0.8) : base;
   }, [activeMatch]);
 
-  // Crowd simulation engine
-  const { simulatedZones, isSimulating, startSimulation, stopSimulation } = useCrowdSimulation({
-    zones,
-    stadiumCapacity: stadium.capacity,
-    isActiveMatch: !!activeMatch,
-    getProcessingRate,
-  });
 
-  // When simulation data updates, push it to the main zones state (if simulation is the active source)
-  useEffect(() => {
-    if (dataSource === 'simulation' && simulatedZones.length > 0) {
-      setZones(prev => prev.map(zone => {
-        const sim = simulatedZones.find(s => s.id === zone.id);
-        if (sim) {
-          return {
-            ...zone,
-            currentCrowd: sim.currentCrowd,
-            estimatedWaitMinutes: sim.estimatedWaitMinutes,
-          };
-        }
-        return zone;
-      }));
-    }
-  }, [simulatedZones, dataSource]);
-
-  // Auto-start simulation on load
-  useEffect(() => {
-    if (dataSource === 'simulation' && !isSimulating) {
-      startSimulation();
-    }
-    return () => {
-      if (isSimulating) stopSimulation();
-    };
-  }, [dataSource]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Host/Command Center state
   const { model, isInitializing, estimateCrowd } = useCrowdModel();
@@ -130,8 +93,8 @@ function DashboardContent() {
           const latestForZone = data.find(d => d.zone_id === zone.id);
           if (latestForZone) {
             const crowd = latestForZone.estimated_count;
-            return { 
-              ...zone, 
+            return {
+              ...zone,
               currentCrowd: crowd,
               estimatedWaitMinutes: Math.ceil(crowd / getProcessingRate(zone.id))
             };
@@ -140,7 +103,7 @@ function DashboardContent() {
         }));
       }
     };
-    
+
     fetchLiveStats();
 
     const channel = supabase
@@ -166,8 +129,8 @@ function DashboardContent() {
   }, [dataSource, getProcessingRate]);
 
   const gates = zones.filter(z => z.id.startsWith('gate-'));
-  const worstGate = [...gates].sort((a, b) => b.estimatedWaitMinutes - a.estimatedWaitMinutes)[0];
-  const bestGate = [...gates].sort((a, b) => a.estimatedWaitMinutes - b.estimatedWaitMinutes)[0];
+  const worstGate = [...gates].sort((a, b) => b.estimatedWaitMinutes - a.estimatedWaitMinutes)[0] || zones[0];
+  const bestGate = [...gates].sort((a, b) => a.estimatedWaitMinutes - b.estimatedWaitMinutes)[0] || zones[0];
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -183,15 +146,12 @@ function DashboardContent() {
     if (!imgRef.current) return;
     setLoading(true);
     try {
-      const estimatedCount = await estimateCrowd(imgRef.current, !!activeMatch);
+      const estimatedCount = await estimateCrowd(imgRef.current, false);
       setCount(estimatedCount);
-      
+
       // Auto-update the dashboard with the new specific metric
-      if (dataSource === 'simulation') {
-        stopSimulation();
-        setDataSource('live');
-      }
-      
+      setDataSource('live');
+
       setZones(prev => prev.map(zone => {
         if (zone.id === zoneId) {
           return {
@@ -211,17 +171,14 @@ function DashboardContent() {
 
   // LiveCamera callback: when the ML model processes a frame
   const handleLiveFrame = useCallback(async (videoElement: HTMLVideoElement): Promise<number> => {
-    return await estimateCrowd(videoElement, !!activeMatch);
-  }, [estimateCrowd, activeMatch]);
+    return await estimateCrowd(videoElement, false);
+  }, [estimateCrowd]);
 
   // LiveCamera callback: when a new count is produced
   const handleLiveCountUpdate = useCallback((newCount: number, updatedZoneId: string) => {
     setCount(newCount);
     // When live camera produces data, switch to "live" data source and update zones
-    if (dataSource === 'simulation') {
-      stopSimulation();
-      setDataSource('live');
-    }
+    setDataSource('live');
     setZones(prev => prev.map(zone => {
       if (zone.id === updatedZoneId) {
         return {
@@ -232,7 +189,7 @@ function DashboardContent() {
       }
       return zone;
     }));
-  }, [dataSource, getProcessingRate, stopSimulation]);
+  }, [getProcessingRate]);
 
   const saveToSupabase = async () => {
     if (count === null) return;
@@ -267,12 +224,27 @@ function DashboardContent() {
   // Data source switcher
   const switchDataSource = (source: DataSource) => {
     if (source === dataSource) return;
-    if (isSimulating) stopSimulation();
     setDataSource(source);
-    if (source === 'simulation') {
-      startSimulation();
-    }
   };
+
+  // Simulate random crowd activity (dev/demo mode)
+  useEffect(() => {
+    if (dataSource !== 'live') return;
+
+    const tick = setInterval(() => {
+      setZones(prev => prev.map(zone => {
+        const delta = Math.floor((Math.random() - 0.4) * 80); // bias toward filling
+        const next = Math.max(0, Math.min(zone.capacity, zone.currentCrowd + delta));
+        return {
+          ...zone,
+          currentCrowd: next,
+          estimatedWaitMinutes: Math.ceil(next / getProcessingRate(zone.id)),
+        };
+      }));
+    }, 2000); // update every 2s
+
+    return () => clearInterval(tick);
+  }, [dataSource, getProcessingRate]);
 
   if (!mounted || !role) return null;
 
@@ -287,15 +259,11 @@ function DashboardContent() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-zinc-50 flex items-center gap-2 flex-wrap">
-                {stadium.name} 
+                {stadium.name}
                 <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 font-medium uppercase tracking-wider">
                   {role} View
                 </span>
-                {activeMatch && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/50 text-orange-400 font-bold flex items-center gap-1">
-                    <Activity size={12} className="animate-pulse" /> {activeMatch.name} ({activeMatch.matchType.toUpperCase()})
-                  </span>
-                )}
+
               </h1>
               <p className="text-zinc-400 text-sm">{stadium.city}, {stadium.state} • {stadium.capacity.toLocaleString()} cap</p>
             </div>
@@ -304,19 +272,14 @@ function DashboardContent() {
             {/* Data Source Switcher (Host Only) */}
             {role === 'host' && (
               <div className="hidden md:flex rounded-xl border border-zinc-800 bg-zinc-950 p-1 mr-4">
-                <button 
-                  onClick={() => switchDataSource('simulation')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'simulation' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  Simulation
-                </button>
-                <button 
+
+                <button
                   onClick={() => switchDataSource('live')}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'live' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
                   Live
                 </button>
-                <button 
+                <button
                   onClick={() => switchDataSource('supabase')}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${dataSource === 'supabase' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
                 >
@@ -375,13 +338,12 @@ function DashboardContent() {
               </div>
 
               {feedMode === 'camera' ? (
-                <LiveCamera 
+                <LiveCamera
                   onFrame={handleLiveFrame}
                   onCountUpdate={handleLiveCountUpdate}
                   zoneId={zoneId}
                   zoneName={zones.find(z => z.id === zoneId)?.name || zoneId}
                   isModelReady={!!model && !isInitializing}
-                  isActiveMatch={!!activeMatch}
                 />
               ) : (
                 <>
@@ -390,7 +352,7 @@ function DashboardContent() {
                       <div className="w-full h-full relative group">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={imageSrc} ref={imgRef} alt="Upload preview" className="w-full h-full object-contain bg-zinc-900" />
-                        <button 
+                        <button
                           onClick={() => { setImageSrc(null); setCount(null); }}
                           className="absolute top-2 right-2 bg-zinc-900/80 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600 text-white"
                         >
@@ -458,28 +420,16 @@ function DashboardContent() {
         )}
 
         {/* Global Alert Notification */}
-        {worstGate?.estimatedWaitMinutes > 15 ? (
-          <div className="bg-blue-500/10 border border-blue-500/30 p-5 rounded-2xl flex items-start gap-4 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
-            <div className="mt-1 text-blue-400 animate-pulse bg-blue-500/20 p-2 rounded-xl"><Navigation size={20} /></div>
-            <div>
-              <h3 className="font-bold text-blue-100 text-lg">Live Traffic Alert</h3>
-              <p className="text-blue-200/80 mt-1">
-                {worstGate.name} is highly congested ({worstGate.estimatedWaitMinutes} min wait). 
-                Taking {bestGate.name} will save you ~{worstGate.estimatedWaitMinutes - bestGate.estimatedWaitMinutes} minutes.
-              </p>
-            </div>
+        <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+          <div className="mt-1 text-zinc-400 bg-zinc-800 p-2 rounded-xl shrink-0"><Activity size={20} /></div>
+          <div>
+            <h3 className="font-bold text-zinc-100 text-lg">Live Traffic Alert</h3>
+            <p className="text-zinc-400 mt-1">
+              {worstGate.name} is highly congested ({worstGate.estimatedWaitMinutes} min wait).{' '}
+              Taking {bestGate.name} will significantly reduce your wait time.
+            </p>
           </div>
-        ) : (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 p-5 rounded-2xl flex items-start gap-4 shadow-[0_0_30px_rgba(16,185,129,0.05)]">
-            <div className="mt-1 text-emerald-400 bg-emerald-500/20 p-2 rounded-xl"><Navigation size={20} /></div>
-            <div>
-              <h3 className="font-bold text-emerald-100 text-lg">All Clear</h3>
-              <p className="text-emerald-200/80 mt-1">
-                Current stadium zones are moving smoothly. Conditions are optimal.
-              </p>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Core Visualization Layout: Map + Heatmap */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
